@@ -1,5 +1,6 @@
 const _ = require('lodash')
 const bunyan = require('bunyan')
+const Promise = require('bluebird')
 
 const logger = bunyan.createLogger({ name: 'onebyone' })
 
@@ -104,7 +105,7 @@ module.exports = async (
         [stepKey]: dataResult,
       })
     } catch (err) {
-      logger.error(err, 'parser internal error')
+      logger.error(err, 'onebyone internal error')
       exitOnError && process.exit()
     }
   }
