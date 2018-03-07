@@ -27,10 +27,12 @@ module.exports = async (
     logParse = false,
     data = _.identity,
     logData = false,
+    tap = _.identity,
     shouldSkip = () => false,
     shouldNext = () => true,
     exit = false,
     exitOnError = false,
+    concurrency = 1,
     delay = 0,
     restart = 0,
   } = step
@@ -68,47 +70,59 @@ module.exports = async (
   logParse &&
     logger.info({ logParse: parseResult }, `${currentStepKey}.logParse`)
   try {
-    dataResults = _.compact(
-      _.castArray(await invoke(data, parseResult, allStepRecords))
-    )
+    dataResults = await invoke(data, parseResult, allStepRecords)
+    logData &&
+      logger.info({ logData: dataResults }, `${currentStepKey}.logData`)
   } catch (err) {
     logger.error(err, `${currentStepKey}.data`)
     exitOnError && process.exit()
     return
   }
-  logData && logger.info({ logData: dataResults }, `${currentStepKey}.logData`)
-  exit && process.exit()
-  for (const [i, dataResult] of dataResults.entries()) {
-    const nextStepKey = `${stepHistory}${stepHistory && '.'}${stepKey}[${i}]`
-    try {
-      try {
-        if (await invoke(shouldSkip, dataResult)) {
-          continue
-        }
-      } catch (err) {
-        logger.error(err, `${nextStepKey}.shouldSkip`)
-        exitOnError && process.exit()
-        continue
-      }
-      try {
-        if (!await invoke(shouldNext, dataResult)) {
-          continue
-        }
-      } catch (err) {
-        logger.error(err, `${nextStepKey}.shouldNext`)
-        exitOnError && process.exit()
-        continue
-      }
-      delay && (await Promise.delay(delay * 1000))
-      await module.exports(restSteps, nextStepKey, dataResult, {
-        ...allStepRecords,
-        [stepKey]: dataResult,
-      })
-    } catch (err) {
-      logger.error(err, 'onebyone internal error')
-      exitOnError && process.exit()
-    }
+  try {
+    !_.isEmpty(dataResults) && (await tap(dataResults))
+  } catch (err) {
+    logger.error(err, `${currentStepKey}.tap`)
+    exitOnError && process.exit()
+    return
   }
+  exit && process.exit()
+  await Promise.map(
+    _.compact(_.castArray(dataResults)),
+    async (dataResult, i) => {
+      const nextStepKey = `${stepHistory}${stepHistory && '.'}${stepKey}[${i}]`
+      try {
+        try {
+          if (await invoke(shouldSkip, dataResult)) {
+            return
+          }
+        } catch (err) {
+          logger.error(err, `${nextStepKey}.shouldSkip`)
+          exitOnError && process.exit()
+          return
+        }
+        try {
+          if (!await invoke(shouldNext, dataResult)) {
+            return
+          }
+        } catch (err) {
+          logger.error(err, `${nextStepKey}.shouldNext`)
+          exitOnError && process.exit()
+          return
+        }
+        delay && (await Promise.delay(delay * 1000))
+        await module.exports(restSteps, nextStepKey, dataResult, {
+          ...allStepRecords,
+          [stepKey]: dataResult,
+        })
+      } catch (err) {
+        logger.error(err, 'onebyone internal error')
+        exitOnError && process.exit()
+      }
+    },
+    {
+      concurrency,
+    }
+  ) 
   if (restart) {
     logger.info(`wait ${restart}s to restart`)
     await Promise.delay(restart * 1000)

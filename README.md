@@ -10,10 +10,12 @@ type Steps = {
     logParse = false,
     data: any = async (parseResult, allStepRecords) => {},
     logData = false,
+    tap = async (dataResult) => {},
     shouldSkip: any = async () => false,
     shouldNext: any = async () => true,
     exit = false,
     exitOnError = false,
+    concurrency = 1,
     delay = 0,
     restart = 0,
   }
