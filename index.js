@@ -1,10 +1,9 @@
 const _ = require('lodash')
 const bunyan = require('bunyan')
 
-const logger = bunyan.createLogger({ name: 'onebyone' }
+const logger = bunyan.createLogger({ name: 'onebyone' })
 
 const invoke = (any, ...args) => (_.isFunction(any) ? any(...args) : any)
-
 module.exports = async (
   steps,
   stepHistory = '',
