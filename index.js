@@ -30,11 +30,11 @@ module.exports = async (
     tap = _.identity,
     shouldSkip = () => false,
     shouldNext = () => true,
+    until = () => false,
     exit = false,
     exitOnError = false,
     concurrency = 1,
     delay = 0,
-    restart = 0,
   } = step
 
   let requestArgsResult
@@ -122,10 +122,14 @@ module.exports = async (
     {
       concurrency,
     }
-  ) 
-  if (restart) {
-    logger.info(`wait ${restart}s to restart`)
-    await Promise.delay(restart * 1000)
-    return module.exports(steps, stepHistory, lastDataResult, allStepRecords)
+  )
+  const untilSteps = await invoke(until, parseResult)
+  if (untilSteps) {
+    return module.exports(
+      { ...steps, [stepKey]: { ...steps[stepKey], ...untilSteps } },
+      stepHistory,
+      lastDataResult,
+      allStepRecords
+    )
   }
 }
