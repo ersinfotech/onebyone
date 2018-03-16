@@ -28,9 +28,9 @@ module.exports = async (
     data = _.identity,
     logData = false,
     tap = _.identity,
-    shouldSkip = () => false,
-    shouldNext = () => true,
-    until = () => false,
+    shouldSkip = false,
+    shouldNext = true,
+    until = false,
     exit = false,
     exitOnError = false,
     concurrency = 1,
@@ -45,12 +45,17 @@ module.exports = async (
   const currentStepKey = `${stepHistory}${stepHistory && '.'}${stepKey}`
 
   try {
-    requestArgsResult = await invoke(requestArgs, lastDataResult)
+    requestArgsResult = await invoke(
+      requestArgs,
+      lastDataResult,
+      allStepRecords
+    )
   } catch (err) {
     logger.error(err, `${currentStepKey}.requestArgs`)
     exitOnError && process.exit()
     return
   }
+
   try {
     requestResult = await request(requestArgsResult)
   } catch (err) {
@@ -60,6 +65,7 @@ module.exports = async (
   }
   logRequest &&
     logger.info({ logRequest: requestResult }, `${currentStepKey}.logRequest`)
+
   try {
     parseResult = await parse(requestResult)
   } catch (err) {
@@ -69,30 +75,34 @@ module.exports = async (
   }
   logParse &&
     logger.info({ logParse: parseResult }, `${currentStepKey}.logParse`)
+
   try {
     dataResults = await invoke(data, parseResult, allStepRecords)
-    logData &&
-      logger.info({ logData: dataResults }, `${currentStepKey}.logData`)
   } catch (err) {
     logger.error(err, `${currentStepKey}.data`)
     exitOnError && process.exit()
     return
   }
+  logData && logger.info({ logData: dataResults }, `${currentStepKey}.logData`)
+
   try {
-    !_.isEmpty(dataResults) && (await tap(dataResults))
+    !_.isEmpty(dataResults) && (await tap(dataResults, allStepRecords))
   } catch (err) {
     logger.error(err, `${currentStepKey}.tap`)
     exitOnError && process.exit()
     return
   }
   exit && process.exit()
+
+  delay && (await Promise.delay(delay * 1000))
+
   await Promise.map(
     _.compact(_.castArray(dataResults)),
     async (dataResult, i) => {
       const nextStepKey = `${stepHistory}${stepHistory && '.'}${stepKey}[${i}]`
       try {
         try {
-          if (await invoke(shouldSkip, dataResult)) {
+          if (await invoke(shouldSkip, dataResult, allStepRecords)) {
             return
           }
         } catch (err) {
@@ -100,8 +110,9 @@ module.exports = async (
           exitOnError && process.exit()
           return
         }
+
         try {
-          if (!await invoke(shouldNext, dataResult)) {
+          if (!await invoke(shouldNext, dataResult, allStepRecords)) {
             return
           }
         } catch (err) {
@@ -109,7 +120,7 @@ module.exports = async (
           exitOnError && process.exit()
           return
         }
-        delay && (await Promise.delay(delay * 1000))
+
         await module.exports(restSteps, nextStepKey, dataResult, {
           ...allStepRecords,
           [stepKey]: dataResult,
@@ -123,7 +134,8 @@ module.exports = async (
       concurrency,
     }
   )
-  const untilSteps = await invoke(until, parseResult)
+
+  const untilSteps = await invoke(until, parseResult, allStepRecords)
   if (untilSteps) {
     return module.exports(
       { ...steps, [stepKey]: { ...steps[stepKey], ...untilSteps } },
