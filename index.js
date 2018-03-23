@@ -7,9 +7,7 @@ const logger = bunyan.createLogger({ name: 'onebyone' })
 const invoke = (any, ...args) => (_.isFunction(any) ? any(...args) : any)
 module.exports = async (
   steps,
-  stepHistory = '',
-  lastDataResult,
-  allStepRecords = {}
+  { path, stepHistory = '', lastDataResult, allStepRecords = {} } = {}
 ) => {
   const stepKeys = _.keys(steps)
   if (_.isEmpty(stepKeys)) {
@@ -43,6 +41,7 @@ module.exports = async (
   let dataResults
 
   const currentStepKey = `${stepHistory}${stepHistory && '.'}${stepKey}`
+  const pwd = path && ` in ${path}`
 
   try {
     requestArgsResult = await invoke(
@@ -51,7 +50,7 @@ module.exports = async (
       allStepRecords
     )
   } catch (err) {
-    logger.error(err, `${currentStepKey}.requestArgs`)
+    logger.error(err, `${currentStepKey}.requestArgs${pwd}`)
     exitOnError && process.exit()
     return
   }
@@ -59,36 +58,40 @@ module.exports = async (
   try {
     requestResult = await request(requestArgsResult)
   } catch (err) {
-    logger.error(err, `${currentStepKey}.request`)
+    logger.error(err, `${currentStepKey}.request${pwd}`)
     exitOnError && process.exit()
     return
   }
   logRequest &&
-    logger.info({ logRequest: requestResult }, `${currentStepKey}.logRequest`)
+    logger.info(
+      { logRequest: requestResult },
+      `${currentStepKey}.logRequest${pwd}`
+    )
 
   try {
     parseResult = await parse(requestResult)
   } catch (err) {
-    logger.error(err, `${currentStepKey}.parse`)
+    logger.error(err, `${currentStepKey}.parse${pwd}`)
     exitOnError && process.exit()
     return
   }
   logParse &&
-    logger.info({ logParse: parseResult }, `${currentStepKey}.logParse`)
+    logger.info({ logParse: parseResult }, `${currentStepKey}.logParse${pwd}`)
 
   try {
     dataResults = await invoke(data, parseResult, allStepRecords)
   } catch (err) {
-    logger.error(err, `${currentStepKey}.data`)
+    logger.error(err, `${currentStepKey}.data${pwd}`)
     exitOnError && process.exit()
     return
   }
-  logData && logger.info({ logData: dataResults }, `${currentStepKey}.logData`)
+  logData &&
+    logger.info({ logData: dataResults }, `${currentStepKey}.logData${pwd}`)
 
   try {
     !_.isEmpty(dataResults) && (await tap(dataResults, allStepRecords))
   } catch (err) {
-    logger.error(err, `${currentStepKey}.tap`)
+    logger.error(err, `${currentStepKey}.tap${pwd}`)
     exitOnError && process.exit()
     return
   }
@@ -106,7 +109,7 @@ module.exports = async (
             return
           }
         } catch (err) {
-          logger.error(err, `${nextStepKey}.shouldSkip`)
+          logger.error(err, `${nextStepKey}.shouldSkip${pwd}`)
           exitOnError && process.exit()
           return
         }
@@ -116,17 +119,22 @@ module.exports = async (
             return
           }
         } catch (err) {
-          logger.error(err, `${nextStepKey}.shouldNext`)
+          logger.error(err, `${nextStepKey}.shouldNext${pwd}`)
           exitOnError && process.exit()
           return
         }
 
-        await module.exports(restSteps, nextStepKey, dataResult, {
-          ...allStepRecords,
-          [stepKey]: dataResult,
+        await module.exports(restSteps, {
+          path,
+          stepHistory: nextStepKey,
+          lastDataResult: dataResult,
+          allStepRecords: {
+            ...allStepRecords,
+            [stepKey]: dataResult,
+          },
         })
       } catch (err) {
-        logger.error(err, 'onebyone internal error')
+        logger.error(err, `onebyone internal error${pwd}`)
         exitOnError && process.exit()
       }
     },
@@ -139,9 +147,12 @@ module.exports = async (
   if (untilSteps) {
     return module.exports(
       { ...steps, [stepKey]: { ...steps[stepKey], ...untilSteps } },
-      stepHistory,
-      lastDataResult,
-      allStepRecords
+      {
+        path,
+        stepHistory,
+        lastDataResult,
+        allStepRecords,
+      }
     )
   }
 }
