@@ -7,7 +7,7 @@ const logger = bunyan.createLogger({ name: 'onebyone' })
 const invoke = (any, ...args) => (_.isFunction(any) ? any(...args) : any)
 module.exports = async (
   steps,
-  { path, stepHistory = '', lastDataResult, allStepRecords = {} } = {}
+  { path = '', stepHistory = '', lastDataResult, allStepRecords = {} } = {}
 ) => {
   const stepKeys = _.keys(steps)
   if (_.isEmpty(stepKeys)) {
@@ -115,7 +115,7 @@ module.exports = async (
         }
 
         try {
-          if (!await invoke(shouldNext, dataResult, allStepRecords)) {
+          if (!(await invoke(shouldNext, dataResult, allStepRecords))) {
             return
           }
         } catch (err) {
