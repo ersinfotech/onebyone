@@ -4,15 +4,15 @@
 type Steps = {
   [key]: {
     requestArgs: any = async (lastStepDataResult, allStepRecords) => {},
-    request = async (requestArgsResult) => {},
+    request = async (requestArgsResult, allStepRecords) => {},
     logRequest = false,
-    parse = async (requestResult) => {}
+    parse = async (requestResult, allStepRecords) => {}
     logParse = false,
     data: any = async (parseResult, allStepRecords) => {},
     logData = false,
     tap = async (dataResult, allStepRecords) => {},
-    shouldSkip: any = async () => false,
-    shouldNext: any = async () => true,
+    shouldSkip: any = async (singleDataResult, allStepRecords) => false,
+    shouldNext: any = async (singleDataResult, allStepRecords) => true,
     until: any = async (parseResult, allStepRecords) => false,
     exit = false,
     exitOnError = false,

@@ -56,7 +56,7 @@ module.exports = async (
   }
 
   try {
-    requestResult = await request(requestArgsResult)
+    requestResult = await request(requestArgsResult, allStepRecords)
   } catch (err) {
     logger.error(err, `${currentStepKey}.request${pwd}`)
     exitOnError && process.exit()
@@ -69,7 +69,7 @@ module.exports = async (
     )
 
   try {
-    parseResult = await parse(requestResult)
+    parseResult = await parse(requestResult, allStepRecords)
   } catch (err) {
     logger.error(err, `${currentStepKey}.parse${pwd}`)
     exitOnError && process.exit()
