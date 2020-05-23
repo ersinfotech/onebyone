@@ -2,7 +2,10 @@ const _ = require('lodash')
 const bunyan = require('bunyan')
 const Promise = require('bluebird')
 
-const logger = bunyan.createLogger({ name: 'onebyone' })
+const logger = bunyan.createLogger({
+  name: 'onebyone',
+  serializers: bunyan.stdSerializers,
+})
 
 const invoke = (any, ...args) => (_.isFunction(any) ? any(...args) : any)
 module.exports = async (
@@ -50,7 +53,10 @@ module.exports = async (
       allStepRecords
     )
   } catch (err) {
-    logger.error(err, `${currentStepKey}.requestArgs${pwd}`)
+    logger.error(
+      { err, ctx: allStepRecords },
+      `${currentStepKey}.requestArgs${pwd}`
+    )
     exitOnError && process.exit()
     return
   }
@@ -58,7 +64,10 @@ module.exports = async (
   try {
     requestResult = await request(requestArgsResult, allStepRecords)
   } catch (err) {
-    logger.error(err, `${currentStepKey}.request${pwd}`)
+    logger.error(
+      { err, ctx: allStepRecords },
+      `${currentStepKey}.request${pwd}`
+    )
     exitOnError && process.exit()
     return
   }
@@ -71,7 +80,7 @@ module.exports = async (
   try {
     parseResult = await parse(requestResult, allStepRecords)
   } catch (err) {
-    logger.error(err, `${currentStepKey}.parse${pwd}`)
+    logger.error({ err, ctx: allStepRecords }, `${currentStepKey}.parse${pwd}`)
     exitOnError && process.exit()
     return
   }
@@ -81,7 +90,7 @@ module.exports = async (
   try {
     dataResults = await invoke(data, parseResult, allStepRecords)
   } catch (err) {
-    logger.error(err, `${currentStepKey}.data${pwd}`)
+    logger.error({ err, ctx: allStepRecords }, `${currentStepKey}.data${pwd}`)
     exitOnError && process.exit()
     return
   }
@@ -91,13 +100,16 @@ module.exports = async (
   try {
     !_.isEmpty(dataResults) && (await tap(dataResults, allStepRecords))
   } catch (err) {
-    logger.error(err, `${currentStepKey}.tap${pwd}`)
+    logger.error({ err, ctx: allStepRecords }, `${currentStepKey}.tap${pwd}`)
     exitOnError && process.exit()
     return
   }
   exit && process.exit()
 
-  delay && (await Promise.delay(delay * 1000))
+  delay &&
+    (await Promise.delay(
+      (await invoke(delay, lastDataResult, allStepRecords)) * 1000
+    ))
 
   await Promise.map(
     _.compact(_.castArray(dataResults)),
@@ -109,7 +121,10 @@ module.exports = async (
             return
           }
         } catch (err) {
-          logger.error(err, `${nextStepKey}.shouldSkip${pwd}`)
+          logger.error(
+            { err, ctx: allStepRecords },
+            `${nextStepKey}.shouldSkip${pwd}`
+          )
           exitOnError && process.exit()
           return
         }
@@ -119,7 +134,10 @@ module.exports = async (
             return
           }
         } catch (err) {
-          logger.error(err, `${nextStepKey}.shouldNext${pwd}`)
+          logger.error(
+            { err, ctx: allStepRecords },
+            `${nextStepKey}.shouldNext${pwd}`
+          )
           exitOnError && process.exit()
           return
         }
@@ -134,12 +152,15 @@ module.exports = async (
           },
         })
       } catch (err) {
-        logger.error(err, `onebyone internal error${pwd}`)
+        logger.error(
+          { err, ctx: allStepRecords },
+          `onebyone internal error${pwd}`
+        )
         exitOnError && process.exit()
       }
     },
     {
-      concurrency,
+      concurrency: await invoke(concurrency, lastDataResult, allStepRecords),
     }
   )
 
