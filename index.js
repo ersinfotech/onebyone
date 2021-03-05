@@ -111,7 +111,13 @@ module.exports = async (
       (await invoke(delay, lastDataResult, allStepRecords)) * 1000
     ))
 
-  await Promise.map(
+  const concurrencyResult = await invoke(
+    concurrency,
+    lastDataResult,
+    allStepRecords
+  )
+
+  await Promise[concurrencyResult === 1 ? 'mapSeries' : 'map'](
     _.compact(_.castArray(dataResults)),
     async (dataResult, i) => {
       const nextStepKey = `${stepHistory}${stepHistory && '.'}${stepKey}[${i}]`
@@ -160,7 +166,7 @@ module.exports = async (
       }
     },
     {
-      concurrency: await invoke(concurrency, lastDataResult, allStepRecords),
+      concurrency: concurrencyResult,
     }
   )
 
