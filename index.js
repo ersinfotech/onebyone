@@ -36,6 +36,7 @@ module.exports = async (
     exitOnError = false,
     concurrency = 1,
     delay = 0,
+    logCtx = true,
   } = step
 
   let requestArgsResult
@@ -54,7 +55,7 @@ module.exports = async (
     )
   } catch (err) {
     logger.error(
-      { err, ctx: allStepRecords },
+      { err, ctx: logCtx && allStepRecords },
       `${currentStepKey}.requestArgs${pwd}`
     )
     exitOnError && process.exit()
@@ -65,7 +66,7 @@ module.exports = async (
     requestResult = await request(requestArgsResult, allStepRecords)
   } catch (err) {
     logger.error(
-      { err, ctx: allStepRecords },
+      { err, ctx: logCtx && allStepRecords },
       `${currentStepKey}.request${pwd}`
     )
     exitOnError && process.exit()
@@ -80,7 +81,10 @@ module.exports = async (
   try {
     parseResult = await parse(requestResult, allStepRecords)
   } catch (err) {
-    logger.error({ err, ctx: allStepRecords }, `${currentStepKey}.parse${pwd}`)
+    logger.error(
+      { err, ctx: logCtx && allStepRecords },
+      `${currentStepKey}.parse${pwd}`
+    )
     exitOnError && process.exit()
     return
   }
@@ -90,7 +94,10 @@ module.exports = async (
   try {
     dataResults = await invoke(data, parseResult, allStepRecords)
   } catch (err) {
-    logger.error({ err, ctx: allStepRecords }, `${currentStepKey}.data${pwd}`)
+    logger.error(
+      { err, ctx: logCtx && allStepRecords },
+      `${currentStepKey}.data${pwd}`
+    )
     exitOnError && process.exit()
     return
   }
@@ -100,7 +107,10 @@ module.exports = async (
   try {
     !_.isEmpty(dataResults) && (await tap(dataResults, allStepRecords))
   } catch (err) {
-    logger.error({ err, ctx: allStepRecords }, `${currentStepKey}.tap${pwd}`)
+    logger.error(
+      { err, ctx: logCtx && allStepRecords },
+      `${currentStepKey}.tap${pwd}`
+    )
     exitOnError && process.exit()
     return
   }
@@ -128,7 +138,7 @@ module.exports = async (
           }
         } catch (err) {
           logger.error(
-            { err, ctx: allStepRecords },
+            { err, ctx: logCtx && allStepRecords },
             `${nextStepKey}.shouldSkip${pwd}`
           )
           exitOnError && process.exit()
@@ -141,7 +151,7 @@ module.exports = async (
           }
         } catch (err) {
           logger.error(
-            { err, ctx: allStepRecords },
+            { err, ctx: logCtx && allStepRecords },
             `${nextStepKey}.shouldNext${pwd}`
           )
           exitOnError && process.exit()
@@ -159,7 +169,7 @@ module.exports = async (
         })
       } catch (err) {
         logger.error(
-          { err, ctx: allStepRecords },
+          { err, ctx: logCtx && allStepRecords },
           `onebyone internal error${pwd}`
         )
         exitOnError && process.exit()
@@ -170,7 +180,17 @@ module.exports = async (
     }
   )
 
-  const untilSteps = await invoke(until, parseResult, allStepRecords)
+  let untilSteps
+  try {
+    untilSteps = await invoke(until, parseResult, allStepRecords)
+  } catch (err) {
+    logger.error(
+      { err, ctx: logCtx && allStepRecords },
+      `${currentStepKey}.until${pwd}`
+    )
+    exitOnError && process.exit()
+    return
+  }
   if (untilSteps) {
     return module.exports(
       { ...steps, [stepKey]: { ...steps[stepKey], ...untilSteps } },
